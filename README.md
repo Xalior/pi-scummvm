@@ -315,9 +315,6 @@ them again.
 | `kernel.cpp`, `kernel.h`, `main.cpp` | The Circle kernel: brings up the serial console, the SD card and the filesystem, elects the three cores, and calls ScummVM. |
 | `scummvm_backend.cpp` | The backend object ScummVM runs on here, and the entry point that starts it. It stands in for the per-operating-system startup upstream ships one of for every platform it supports. |
 | `circle_syscalls.cpp` | Puts the SD card underneath the C library in a way that is legal from a core that does not own the hardware. |
-| `sdl2_surface.cpp` | The surface and texture work ScummVM needs and the SDL2 layer does not implement: 8-bit paletted and 16-bit surfaces, blitting between all three depths, and RGB565 textures. |
-| `sdl2_timer.cpp` | SDL's callback timers, on a machine with no thread to serve them from. |
-| `circle_stubs.cpp` | The remaining SDL entry points: mutexes, the audio device under SDL's older names, and the desktop features this board does not have. |
 | `defaults.cpp`, `defaultsblock.h`, `scummvm-defaults.ld` | The block of text inside the image that a boot can append to ScummVM's command line. |
 | `svmgen/` | The three files ScummVM's own `configure` would generate: the build configuration, and the two tables naming the engines linked in. |
 | `config.txt`, `cmdline.txt` | Firmware boot configuration, one file for all three boards. |

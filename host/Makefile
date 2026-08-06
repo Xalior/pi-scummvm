@@ -80,11 +80,10 @@ include ../mk/scummvm-features.mk
 # Sources
 # ---------------------------------------------------------------------------
 
-# The kernel wrapper, the syscall layer, this port's own backend and the SDL
-# surfaces the shim does not implement. Each file says at its top what it is
-# answering for.
+# The kernel wrapper, the syscall layer, and this port's own backend. Each
+# file says at its top what it is answering for.
 HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
-	circle_stubs.cpp sdl2_surface.cpp sdl2_timer.cpp scummvm_backend.cpp
+	scummvm_backend.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
 # ScummVM's own source list, as ScummVM's own module.mk files gave it for
@@ -219,11 +218,11 @@ SVM_CXXFLAGS = -Wno-multichar -Wno-unused-parameter
 
 # The shim comes in whole, every member, rather than only the members the
 # link happens to need. An object file linked straight into the kernel beats
-# an archive member of the same name and does it silently, so a stub in
-# circle_stubs.cpp left behind after the library implemented the real thing
-# would quietly win — the game would keep calling the stub and nothing would
-# say so. Pulling the archive in whole turns that into a duplicate-symbol
-# error at link time, which is the only moment it can still be cheap to fix.
+# an archive member of the same name and does it silently, so a host-side
+# stub left behind after the library implemented the real thing would
+# quietly win — the game would keep calling the stub and nothing would say
+# so. Pulling the archive in whole turns that into a duplicate-symbol error
+# at link time, which is the only moment it can still be cheap to fix.
 SHIM_LIB = $(SHIM)/libSDL2-$(RAPI_BOARD).a
 
 LIBS = --whole-archive $(SHIM_LIB) --no-whole-archive \
@@ -264,38 +263,10 @@ WRAPPED_SYSCALLS = \
 	_fcntl mkdir chdir getcwd dup dup2 \
 	opendir readdir closedir rewinddir
 
-# ---------------------------------------------------------------------------
-# SDL functions the shim owns and this port extends
-# ---------------------------------------------------------------------------
-#
-# circle-libsdl2 implements SDL_CreateRGBSurface and SDL_FreeSurface for
-# 32-bit surfaces and refuses anything else. ScummVM's game screen, its
-# overlay and its mouse cursor are 8-bit paletted, so this port adds those
-# depths — and adding them means intercepting the pair, because a surface
-# with a palette cannot be freed by a function that knows nothing about
-# palettes. sdl2_surface.cpp holds both.
-#
-# The four texture calls are the same arrangement one level up. ScummVM's
-# SDL 2 screen is RGB565 and it asks for a streaming texture in that format;
-# the shim's textures are ARGB8888 and nothing else. So a texture the shim
-# made is remembered here with the format its owner believes it has, and the
-# conversion happens on the way in. See sdl2_surface.cpp.
-#
-# SDL_PollEvent and SDL_Delay are wrapped for a third reason: they are where
-# this port's SDL_AddTimer timers are serviced. See sdl2_timer.cpp.
-#
-# --wrap for the same reason as the syscalls above: it leaves the library's
-# implementations in place and reachable as __real_*, so the wrapper handles
-# the new case and hands every other one straight back. A plain redefinition
-# would collide with the archive, which is linked whole precisely so that it
-# does.
-WRAPPED_SDL = SDL_CreateRGBSurface SDL_FreeSurface SDL_PollEvent SDL_Delay \
-	SDL_CreateTexture SDL_UpdateTexture SDL_QueryTexture SDL_DestroyTexture
-
 # The link is driven by the cross ld directly (Circle's Rules.mk sets
 # LD = <prefix>ld for GCC builds), so these are plain linker options, not
 # compiler-driver -Wl, ones.
-LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS) $(WRAPPED_SDL))
+LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS))
 
 # ---------------------------------------------------------------------------
 # Compilation
