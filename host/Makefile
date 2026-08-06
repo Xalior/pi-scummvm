@@ -162,6 +162,19 @@ DEFINE += -DRAPI_GAME_DIR='"$(RAPI_GAME_DIR)"'
 
 # What ScummVM's own build would have put in DEFINES.
 #
+#   HAVE_CONFIG_H  the switch that makes svmgen/config.h reachable.
+#                  common/scummsys.h — which every ScummVM source includes —
+#                  reads config.h only inside `#if defined(HAVE_CONFIG_H)`,
+#                  so without this define the file is present on the include
+#                  path and never opened, and every feature it declares is
+#                  simply absent. The absence is silent: scummsys.h falls back
+#                  to asking SDL for the endianness, the build compiles and
+#                  links, and the switches that decide what gets REGISTERED
+#                  rather than what gets COMPILED are the ones that vanish.
+#                  DETECTION_STATIC is one of them, and it is what makes
+#                  base/plugins.cpp include engines/detection_table.h, which
+#                  is the only thing that links an engine's game-detection
+#                  tables into the executable.
 #   SDL_BACKEND    the backend family this port belongs to. Every SDL-derived
 #                  platform sets it, and it is what selects the SDL event,
 #                  graphics, mixer, mutex and timer managers.
@@ -185,6 +198,7 @@ DEFINE += -DRAPI_GAME_DIR='"$(RAPI_GAME_DIR)"'
 #                  carry the file's type. Newlib's does not — it is not part
 #                  of POSIX — so ScummVM asks the filesystem with stat()
 #                  instead, which is the fallback that switch selects.
+DEFINE += -DHAVE_CONFIG_H
 DEFINE += -DSDL_BACKEND -DUSE_SDL2 -DPOSIX
 DEFINE += -DSYSTEM_NOT_SUPPORTING_D_TYPE
 DEFINE += -DENABLE_SCUMM=$(ENABLE_SCUMM) -DENABLE_SCUMM_7_8

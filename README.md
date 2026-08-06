@@ -328,7 +328,7 @@ them again.
 | `scummvm_backend.cpp` | The backend object ScummVM runs on here, and the entry point that starts it. It stands in for the per-operating-system startup upstream ships one of for every platform it supports. |
 | `circle_syscalls.cpp` | Puts the SD card underneath the C library in a way that is legal from a core that does not own the hardware. |
 | `defaults.cpp`, `defaultsblock.h`, `scummvm-defaults.ld` | The block of text inside the image that a boot can append to ScummVM's command line. |
-| `svmgen/` | The three files ScummVM's own `configure` would generate: the build configuration, and the two tables naming the engines linked in. |
+| `svmgen/` | The three files ScummVM's own `configure` would generate: the build configuration, and the two tables naming the engines linked in. ScummVM reads the configuration only when `HAVE_CONFIG_H` is defined, which `host/Makefile` does. |
 | `config.txt`, `cmdline.txt` | Firmware boot configuration, one file for all three boards. |
 
 **Nothing upstream is patched.** ScummVM's file lists come from ScummVM's own

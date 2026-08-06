@@ -7,6 +7,12 @@
 // answers instead: it is upstream's own interface, written down rather than
 // probed.
 //
+// common/scummsys.h reads it only when HAVE_CONFIG_H is defined, so host/
+// Makefile defines that alongside the rest of ScummVM's compiler defines.
+// Without it this file sits on the include path unopened and every switch
+// below reads as off, which compiles and links and then behaves as a build
+// with no game detection, no scalers and no music drivers.
+//
 // It is deliberately arranged in the same order and with the same spellings
 // as a generated one, so the two can be read side by side when upstream adds
 // a switch. A line is `#define` where the feature is present and `#undef`
