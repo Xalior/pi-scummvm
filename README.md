@@ -120,10 +120,12 @@ yet.
 
 ## What you need to supply
 
-**This repository contains no game data, and cannot.** A SCUMM game's rooms,
-artwork, scripts, speech and music are the publisher's, not ScummVM's and not
-this project's. Building the images does not download anything, and neither
-does staging a card.
+**This repository ships no game data.** A SCUMM game's rooms, artwork,
+scripts, speech and music are the publisher's, not ScummVM's and not this
+project's. Building the images does not download anything, and neither does
+staging a card — `make media` is a separate, explicit step, and the one
+game it can fetch (see below) is a freely distributable demo, not a
+retail release.
 
 ScummVM's own [game
 documentation](https://wiki.scummvm.org/index.php/Category:Supported_Games)
@@ -142,18 +144,28 @@ game shipped with, most often a small handful:
 **A copy you own.** The Steam, GOG and disc releases all install the game's
 files as ordinary files. Copying those files is all that is needed.
 
-**`make media` cannot help you here, and says so.** Some ports in this family
-use that step to download a game whose author gives it away. Every SCUMM game
-is a commercial product, so there is no address this project could honestly
-download one from, and running `make media` in this repository prints what to
-supply and then fails:
+**One game has a legitimately free demo, and `make media` fetches it.**
+LucasArts gave away a demo of Day of the Tentacle on magazine cover discs in
+1997, and it is still freely available: the SCUMM engine's own index and
+resource files, its speech and sound resource, and its music driver data —
+the same shape the full game uses, just the one demo scenario. Checked
+against ScummVM's own published freeware list first: none of the eleven
+games it names use the SCUMM engine, so this demo is the only legitimately
+free SCUMM data this build can fetch for you.
 
 ```sh
-make media      # prints instructions and exits non-zero
+make media      # fetches the Day of the Tentacle demo into media/game/
 ```
 
-It fails rather than succeeding quietly because a build step that could not
-deliver must not report success to whatever called it.
+It downloads one zip, verifies it against the checksum computed the first
+time this project fetched it (no independently published checksum exists for
+this file), unpacks it, and writes `media/provenance.txt` recording where it
+came from and under what terms.
+
+Every other SCUMM game, including the full Day of the Tentacle, is a
+commercial product with no free equivalent. There is no address this project
+could honestly download one from — copy your own into `media/game/`,
+replacing the demo's files, and stage the card again.
 
 ### Where to put them
 

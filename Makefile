@@ -187,26 +187,96 @@ netboot: rpi5
 # card. It is not tracked and it is never shipped: the files in it belong to
 # the game's publisher, not to this project.
 #
-# THIS TARGET CANNOT FETCH ANYTHING, and it says so and fails. Every SCUMM
-# game is somebody's commercial product; not one of them is given away, and
-# there is no address this project could honestly download one from. What is
-# left for the target to do is say precisely what to supply and where to put
-# it — and then exit non-zero, because a step that could not deliver must
-# not report success to whatever called it.
+# Every SCUMM game is somebody's commercial product except one: LucasArts
+# gave away a demo of Day of the Tentacle on magazine cover discs in 1997,
+# and it is still legitimately available. `make media` fetches that one
+# file this repository can honestly download, and says so. For every other
+# SCUMM game — the full Day of the Tentacle included — there is no address
+# this project could download from; a copy you own goes into media/game/ by
+# hand, in place of or after the demo.
 MEDIA_DIR = media
 
+DOTT_DEMO_ZIP_URL = https://archive.org/download/day-of-the-tentacle-demo/Day%20of%20the%20Tentacle%20demo.zip
+DOTT_DEMO_SHA256  = 712d84a4142b5816d6c1ffee2df3d9d75be6879e9e53327b1ae2ef62eb4625dc
+
+# sha256sum on Linux, shasum on macOS. Whichever exists; if neither does the
+# target stops rather than accepting a download it cannot check.
+SHA256SUM := $(firstword $(shell command -v sha256sum 2>/dev/null) \
+                         $(shell command -v shasum 2>/dev/null))
+
 media:
-	@echo "This repository ships no game data, and cannot fetch any."
-	@echo ""
-	@echo "Every SCUMM game is a commercial product. Use a copy you own:"
-	@echo "the Steam, GOG and disc releases all install the game's files"
-	@echo "as ordinary files."
-	@echo ""
-	@echo "  Copy ONE game's files into $(MEDIA_DIR)/game/, then run 'make card'."
-	@echo ""
-	@echo "See README.md for which games this build plays and what their"
-	@echo "files are called."
-	@exit 1
+	@if [ -z "$(SHA256SUM)" ]; then \
+		echo "  MEDIA no checksum tool on this machine (sha256sum or shasum)"; \
+		echo "        — refusing to download something that cannot be verified."; \
+		exit 1; \
+	fi
+	@command -v unzip >/dev/null 2>&1 || { \
+		echo "  MEDIA no 'unzip' on this machine — the demo is distributed as"; \
+		echo "        a zip and cannot be unpacked without it."; \
+		exit 1; }
+	@mkdir -p $(MEDIA_DIR)/game
+	@if [ -f "$(MEDIA_DIR)/game/DOTTDEMO.000" ]; then \
+		echo "  MEDIA $(MEDIA_DIR)/game/DOTTDEMO.000 already here — verifying"; \
+	else \
+		echo "  MEDIA fetching $(DOTT_DEMO_ZIP_URL)"; \
+		curl -fL --retry 3 -o "$(MEDIA_DIR)/dott-demo.zip.part" "$(DOTT_DEMO_ZIP_URL)" || { \
+			rm -f "$(MEDIA_DIR)/dott-demo.zip.part"; \
+			echo "  MEDIA download failed"; exit 1; }; \
+		mv "$(MEDIA_DIR)/dott-demo.zip.part" "$(MEDIA_DIR)/dott-demo.zip"; \
+		got=`$(SHA256SUM) -a 256 "$(MEDIA_DIR)/dott-demo.zip" 2>/dev/null || $(SHA256SUM) "$(MEDIA_DIR)/dott-demo.zip"`; \
+		got=`echo "$$got" | awk '{print $$1}'`; \
+		if [ "$$got" != "$(DOTT_DEMO_SHA256)" ]; then \
+			echo "  MEDIA SHA256 MISMATCH for $(MEDIA_DIR)/dott-demo.zip"; \
+			echo "        expected $(DOTT_DEMO_SHA256)"; \
+			echo "        got      $$got"; \
+			echo "        the file has been left in place for inspection, and is"; \
+			echo "        NOT safe to put on a card."; \
+			exit 1; \
+		fi; \
+		echo "  MEDIA $(MEDIA_DIR)/dott-demo.zip verified against this project's own SHA256"; \
+		unzip -q -j -o "$(MEDIA_DIR)/dott-demo.zip" "DOTTDEMO.000" "DOTTDEMO.001" "DOTTDEMO.EXE" \
+			"MONSTER.SOU" "GMIDI.IMS" "ROLAND.IMS" "ADLIB.IMS" -d "$(MEDIA_DIR)/game" || { \
+			rm -f "$(MEDIA_DIR)/dott-demo.zip"; \
+			echo "  MEDIA could not unpack the demo zip"; exit 1; }; \
+		rm -f "$(MEDIA_DIR)/dott-demo.zip"; \
+	fi
+	@for f in DOTTDEMO.000 DOTTDEMO.001 MONSTER.SOU; do \
+		if [ ! -f "$(MEDIA_DIR)/game/$$f" ]; then \
+			echo "  MEDIA $(MEDIA_DIR)/game/$$f is missing after unpacking — the"; \
+			echo "        archive did not contain what this target expects."; \
+			exit 1; \
+		fi; \
+	done
+	@head -c 4 "$(MEDIA_DIR)/game/MONSTER.SOU" | grep -q "SOU " || { \
+		echo "  MEDIA $(MEDIA_DIR)/game/MONSTER.SOU does not begin with the SCUMM"; \
+		echo "        SOU magic"; exit 1; }; \
+	echo "  MEDIA $(MEDIA_DIR)/game/ verified ($$(wc -c < $(MEDIA_DIR)/game/DOTTDEMO.001 | tr -d ' ') byte resource file, $$(wc -c < $(MEDIA_DIR)/game/MONSTER.SOU | tr -d ' ') byte sound file)"
+	@printf '%s\n' \
+		"Day of the Tentacle demo — the only freely distributable SCUMM game" \
+		"" \
+		"Source:   $(DOTT_DEMO_ZIP_URL)" \
+		"Item:     https://archive.org/details/day-of-the-tentacle-demo" \
+		"Fetched:  `date -u '+%Y-%m-%d %H:%M:%S UTC'`" \
+		"SHA256:   $(DOTT_DEMO_SHA256)  (of the source zip; computed from this" \
+		"          download, not independently published)" \
+		"" \
+		"What it is: LucasArts' 1997 promotional demo of Day of the Tentacle," \
+		"taken from PC Gamer (UK)'s June 1997 cover disc — the SCUMM engine's" \
+		"own index/resource files (DOTTDEMO.000/.001), its speech and sound" \
+		"resource (MONSTER.SOU) and its music driver data, the same shape the" \
+		"full retail game uses." \
+		"" \
+		"Licence: LucasArts' original demo distribution terms — given away" \
+		"freely on magazine cover discs to sell the retail game. Not the" \
+		"retail data. This repository does not redistribute it. Day of the" \
+		"Tentacle is a trademark of LucasArts Entertainment Company LLC." \
+		"" \
+		"Every other SCUMM game, including the full Day of the Tentacle, is" \
+		"paid data with no free equivalent and is not fetched by this target." \
+		"Copy your own into $(MEDIA_DIR)/game/, replacing this demo's files," \
+		"and run 'make card' again." \
+		> $(MEDIA_DIR)/provenance.txt
+	@echo "  MEDIA provenance written to $(MEDIA_DIR)/provenance.txt"
 
 # ---------------------------------------------------------------------------
 # The card
