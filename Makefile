@@ -9,6 +9,8 @@
 #                            cannot hold three worlds at once
 #   make rpi5 | rpi4 | rpi3  one board's kernel image
 #   make kernels             all three, built in parallel
+#   make regen-sources       ask ScummVM's own makefiles for the source
+#                            list again and write mk/upstream-sources.mk
 #   make verify              truth-gate: every image exists and is non-empty
 #   make netboot             stage the Pi 5 image and its boot configuration
 #                            into build/netboot-rpi5/
@@ -47,7 +49,7 @@ IMAGE_rpi5 = kernel_2712.img
 # directory, and both have to name the same place.
 GAME_DIR = games/scummvm
 
-.PHONY: deps kernels rebuild verify netboot media card clean-boards $(BOARDS)
+.PHONY: deps kernels rebuild regen-sources verify netboot media card clean-boards $(BOARDS)
 .PHONY: $(addprefix deps-,$(BOARDS)) $(addprefix rebuild-,$(BOARDS))
 
 deps:
@@ -65,6 +67,46 @@ $(addprefix deps-,$(BOARDS)): deps-%:
 	+@$(NOT_DRY_RUN)
 	$(MAKE) -C circle-libsdl2 world BOARD=$*
 	$(MAKE) -C circle-libsdl2 libSDL2-$*.a BOARD=$*
+
+# ---------------------------------------------------------------------------
+# ScummVM's source list
+# ---------------------------------------------------------------------------
+#
+# Which of ScummVM's sources this build compiles is ScummVM's own answer, not
+# this project's: its module.mk files name a module's sources and decide which
+# of them exist by testing the switches in mk/scummvm-features.mk. Reading them
+# is a walk over a hundred files and a filesystem lookup for every object, and
+# the answer only changes when the submodule pin moves or a switch does.
+#
+# So it is asked once and written down. mk/upstream-sources.mk is that answer,
+# checked in and read by the build as a plain list; mk/harvest-sources.mk is
+# the walk that produces it.
+#
+# Run this after moving the scummvm pin or changing a feature switch, and
+# commit what it writes.
+.PHONY: regen-sources
+regen-sources:
+	+@$(NOT_DRY_RUN)
+	@{ \
+		echo "# ScummVM's source list, as ScummVM's own module.mk files give it"; \
+		echo "# for the feature switches in mk/scummvm-features.mk."; \
+		echo "#"; \
+		echo "# GENERATED — do not edit. Produced by mk/harvest-sources.mk, which"; \
+		echo "# reads upstream's makefiles; run 'make regen-sources' to write it"; \
+		echo "# again after the scummvm submodule pin moves or a feature switch"; \
+		echo "# changes. Nothing else changes the answer, and the build never"; \
+		echo "# reads upstream's makefiles itself."; \
+		echo "#"; \
+		echo "# Paths are relative to the scummvm submodule."; \
+		echo "SVM_SRCS := \\"; \
+		$(MAKE) -s -C mk -f harvest-sources.mk print \
+			| sed -e '$$ ! s/$$/ \\/' -e 's/^/\t/'; \
+	} > mk/upstream-sources.mk.new
+	@test -s mk/upstream-sources.mk.new || { \
+		echo "  FAIL  the harvest produced no source list"; \
+		rm -f mk/upstream-sources.mk.new; exit 1; }
+	@mv mk/upstream-sources.mk.new mk/upstream-sources.mk
+	@echo "  GEN   mk/upstream-sources.mk ($$(grep -c '\.c' mk/upstream-sources.mk) sources)"
 
 $(BOARDS): check-toolchain
 	+@$(NOT_DRY_RUN)

@@ -71,83 +71,10 @@ TARGET = $(OBJDIR)/$(IMAGE)
 # included makefile, and that would otherwise decide the default goal.
 .DEFAULT_GOAL := image
 
-# ---------------------------------------------------------------------------
-# WHICH ENGINE THIS BUILD PLAYS
-# ---------------------------------------------------------------------------
-#
-# SCUMM — the LucasArts engine. Monkey Island, Day of the Tentacle, Sam &
-# Max, Indiana Jones, Maniac Mansion, Loom, Full Throttle, The Dig.
-#
-# ONE ENGINE, not all of them. ScummVM interprets a hundred different
-# adventure games, each engine a separate body of code, and a build with all
-# of them is several hundred megabytes of object files and a kernel image far
-# past what a Raspberry Pi boots comfortably. Every engine added costs build
-# time and image size, so they are added deliberately.
-#
-# STATIC_PLUGIN rather than DYNAMIC_PLUGIN because there is no dynamic
-# loader on this machine: the engine is linked into the kernel image, and
-# ScummVM's plugin machinery registers it from a table at startup (see
-# svmgen/engines/plugins_table.h).
-#
-# SCUMM has two sub-engines of its own, and they are separate switches
-# because they are separate bodies of code inside the same engine:
-#
-#   SCUMM_7_8   the version 7 and 8 games — Full Throttle, The Dig, Curse of
-#               Monkey Island. ON. It brings the digital iMUSE sound engine
-#               and the SMUSH video player with it, both of which are
-#               ScummVM's own code and need nothing from outside.
-#   HE          the Humongous Entertainment games — Putt-Putt, Freddi Fish,
-#               Backyard Sports. OFF. It is a different family of games from
-#               the LucasArts ones this build is for, and it depends on two
-#               features this port does not have: high-resolution 16-bit
-#               colour, and the Bink video decoder.
-#
-# Adding another engine is these lines, its directory in SVM_MODULES below,
-# and its entry in the two tables in svmgen/engines/. Nothing else.
-ENABLE_SCUMM     := STATIC_PLUGIN
-ENABLE_SCUMM_7_8 := 1
+# The engine and the feature switches, which mk/harvest-sources.mk reads
+# too — the source list below is what they select.
+include ../mk/scummvm-features.mk
 
-# ---------------------------------------------------------------------------
-# The feature selection, as ScummVM's own makefiles read it
-# ---------------------------------------------------------------------------
-#
-# ScummVM's module.mk files decide which sources exist by testing make
-# variables, the same ones its `configure` would have written into config.mk.
-# Set here, in the same spellings, so upstream's own file lists answer for
-# this build without being copied or edited.
-#
-# Every one of these must agree with the matching line in svmgen/config.h:
-# the makefile variable decides whether a file is COMPILED, the C define
-# decides what is INSIDE it, and a build where the two disagree either links
-# a file full of nothing or fails to find a symbol whose source was never
-# offered.
-DETECTION_STATIC := 1
-SDL_BACKEND      := 1
-USE_SDL2         := 1
-USE_SCALERS      := 1
-USE_ASPECT       := 1
-
-# The three sound components SCUMM declares in its own configure.engine, and
-# which ScummVM's configure would switch on for any build with SCUMM in it.
-# All three are ScummVM's own synthesisers, written in C++ and depending on
-# nothing outside the tree, so there is no reason for this port not to have
-# them and one very good reason to: without the FM Towns one the engine does
-# not link at all, because SCUMM's Towns music driver calls straight into it.
-#
-#   USE_MIDI                 the MIDI machinery, including the Adlib
-#                            synthesiser that plays these games' music on a
-#                            machine with no MIDI hardware.
-#   USE_FMTOWNS_PC98_AUDIO   the FM Towns and PC-98 sound chips, for the
-#                            Japanese releases.
-#   USE_SID_AUDIO            the Commodore 64 sound chip, for the C64
-#                            Maniac Mansion and Zak McKracken.
-#
-# SCUMM declares a fourth, imgui, which is its in-game debugger interface.
-# That one is left out: it needs the Dear ImGui library and a renderer
-# backend written against it, and neither exists here.
-USE_MIDI               := 1
-USE_FMTOWNS_PC98_AUDIO := 1
-USE_SID_AUDIO          := 1
 
 # ---------------------------------------------------------------------------
 # Sources
@@ -160,66 +87,19 @@ HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
 	circle_stubs.cpp sdl2_surface.cpp sdl2_timer.cpp scummvm_backend.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
-# ScummVM's own source list, taken from ScummVM's own makefiles.
-#
-# Each module.mk states its module's sources in MODULE_OBJS and ends by
-# including rules.mk, which builds the compile rules. LOAD_RULES_MK is that
-# file's own switch for "list the sources but do not build any rules", and
-# ScummVM sets it exactly this way when it wants a second reading of the
-# same files. So the includes below cost nothing but the list, and this
-# build's rules stay this build's own.
-#
-# srcdir is the name module.mk uses for the tree it belongs to.
-srcdir := $(SVM)
-LOAD_RULES_MK :=
+# ScummVM's own source list, as ScummVM's own module.mk files gave it for
+# the switches above. Generated, checked in, and read here as a plain list:
+# see mk/upstream-sources.mk for how to produce it again.
+include ../mk/upstream-sources.mk
 
-# The shared modules, as Makefile.common lists them, minus four that build
-# something other than the game: `test` is the unit-test runner, `devtools`
-# the data-file authoring programs, `po` the translations (this build has no
-# USE_TRANSLATION) and `doc` the manual.
-SVM_MODULES = \
-	base engines engines/scumm gui backends video image graphics audio math \
-	common common/compression common/formats
 
-# Each module is read, then its list is taken and frozen before the next one
-# is read. Freezing is the whole point of the assignments being `:=`.
-# ScummVM's own makefiles write `DETECT_OBJS += $$(MODULE)/detection.o`, and
-# make keeps that as the TEXT `$$(MODULE)/detection.o` rather than as a path,
-# expanding it wherever it is finally used. Read all the modules first and
-# every detection object would come out named after the LAST module read —
-# a file that does not exist, and a build that stops with nothing to say.
-SVM_OBJS :=
-SVM_DETECT_OBJS :=
-
-$(foreach m,$(SVM_MODULES),$(eval MODULE :=)$(eval MODULE_OBJS :=)$(eval DETECT_OBJS :=)$(eval include $(SVM)/$(m)/module.mk)$(eval SVM_OBJS := $(SVM_OBJS) $(addprefix $(MODULE)/,$(MODULE_OBJS)))$(eval SVM_DETECT_OBJS := $(SVM_DETECT_OBJS) $(DETECT_OBJS)))
-
-# The two files backends/platform/sdl/module.mk contributes. That file is
-# the one module.mk in the tree that does not use rules.mk — it appends to
-# OBJS itself — so reading it the way the others are read would either miss
-# its sources or drag in a platform's worth of them. The rest of what it
-# offers is per-operating-system startup (posix/, win32/, macosx/ and so
-# on), and this port's own is scummvm_backend.cpp beside this makefile.
-SVM_OBJS += backends/platform/sdl/sdl.o backends/platform/sdl/sdl-window.o
-
-# The POSIX filesystem, which is how ScummVM reaches the SD card. Named here
-# rather than by setting the POSIX makefile variable, because that variable
-# would also ask for GTK dialogs, a Unity taskbar and a dlopen plugin
-# provider, none of which exist here. The C define POSIX is set in DEFINE
-# below, which is what these three files actually test.
-SVM_OBJS += \
-	backends/fs/posix/posix-fs.o \
-	backends/fs/posix/posix-fs-factory.o \
-	backends/fs/posix/posix-iostream.o
-
-# Game detection. With DETECTION_STATIC the detection code is linked into the
-# executable instead of loaded as a plugin, and each engine's detection.cpp
-# is named by its own module.mk in DETECT_OBJS rather than in MODULE_OBJS.
-SVM_OBJS += $(SVM_DETECT_OBJS)
-
-# The sources behind those objects. A handful of ScummVM's files are C rather
-# than C++, so each object asks the filesystem which of the two it came from
-# instead of assuming.
-SVM_SRCS = $(foreach o,$(SVM_OBJS),$(if $(wildcard $(SVM)/$(o:.o=.cpp)),$(o:.o=.cpp),$(o:.o=.c)))
+# A source named in the frozen list that is no longer in the tree means the
+# scummvm pin has moved and the list was not written again. Without this, make
+# reports that it has no rule to make an OBJECT, which names the symptom.
+$(SVM)/%.cpp $(SVM)/%.c:
+	@echo "$@ is named in mk/upstream-sources.mk but is not in the scummvm tree."
+	@echo "Run: $(MAKE) -C .. regen-sources"
+	@exit 1
 
 SVM_CXX_OBJS = $(addprefix $(OBJDIR)/svm/,$(patsubst %.cpp,%.o,$(filter %.cpp,$(SVM_SRCS))))
 SVM_C_OBJS   = $(addprefix $(OBJDIR)/svm/,$(patsubst %.c,%.o,$(filter %.c,$(SVM_SRCS))))
