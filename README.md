@@ -7,6 +7,10 @@ launcher, and nothing else running beside it.
 It builds for the Raspberry Pi 3, Pi 4 and Pi 5, all three from one source
 tree.
 
+![Sam & Max Hit the Road running on a Raspberry Pi 5 with no operating system](docs/scummvm-on-bare-metal.jpg)
+
+*Captured from the Pi 5's HDMI output.*
+
 ## What this is
 
 [ScummVM](https://www.scummvm.org/) plays the classic point-and-click
