@@ -296,15 +296,6 @@ pin changes what happens at that temperature: the fan is switched on and the
 processor is left at full speed, instead of being slowed down. That is what a
 game wants, because a slowed processor drops frames.
 
-### Boot options
-
-`cmdline.txt` also accepts switches this kernel reads:
-
-| Option | Effect |
-|---|---|
-| `rapi-perf=N` | Print a performance line to the serial console every N seconds. |
-| `rapi-debug-uart` | Accept key presses from the serial console, so a board with no keyboard attached can still be driven. |
-
 ### Changing ScummVM's own command line
 
 The kernel starts ScummVM with a fixed command line: the game directory, a
@@ -312,34 +303,13 @@ scaling factor, and `--auto-detect` to say "play whatever is in there". A
 block of text inside the image at a fixed offset is appended to that line at
 boot, so a switch can be added — or an existing one overridden, since a later
 setting of the same option wins — without rebuilding or rewriting the card.
-That is what the `rapi-` options above ride on, and any ScummVM option can
-ride with them.
+Any ScummVM option can ride in it.
 
 The one you are most likely to want is `--scale-factor=1`. The baked line
 asks for 2, which turns a 320x200 game into exactly the 640x480 the display
 shows. The version 7 and 8 games draw 640x480 already, so for those a factor
 of 1 saves ScummVM drawing four times the pixels and the display shrinking
 them again.
-
-## How the layers fit
-
-`host/` holds everything this repository adds, and nothing else:
-
-| File | What it is |
-|---|---|
-| `kernel.cpp`, `kernel.h`, `main.cpp` | The Circle kernel: brings up the serial console, the SD card and the filesystem, elects the three cores, and calls ScummVM. |
-| `scummvm_backend.cpp` | The backend object ScummVM runs on here, and the entry point that starts it. It stands in for the per-operating-system startup upstream ships one of for every platform it supports. |
-| `circle_syscalls.cpp` | Puts the SD card underneath the C library in a way that is legal from a core that does not own the hardware. |
-| `defaults.cpp`, `defaultsblock.h`, `scummvm-defaults.ld` | The block of text inside the image that a boot can append to ScummVM's command line. |
-| `svmgen/` | The three files ScummVM's own `configure` would generate: the build configuration, and the two tables naming the engines linked in. ScummVM reads the configuration only when `HAVE_CONFIG_H` is defined, which `host/Makefile` does. |
-| `config.txt`, `cmdline.txt` | Firmware boot configuration, one file for all three boards. |
-
-**Nothing upstream is patched.** ScummVM's file lists come from ScummVM's own
-`module.mk` files, read by this build rather than copied into it, so a change
-upstream makes to what a module contains arrives here by updating the
-submodule. The only things this build tells ScummVM that its own `configure`
-would have are the compiler defines, and every one of them is an option
-upstream already offers.
 
 ## License
 
