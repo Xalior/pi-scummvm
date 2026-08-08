@@ -25,11 +25,6 @@ at an upstream release, and the build reads it without ever writing to it.
 Where ScummVM needs something the SDL2 layer does not provide, this repository
 supplies it in `host/` rather than changing ScummVM.
 
-![ScummVM running on a Raspberry Pi 5 with no operating system](docs/scummvm-on-bare-metal.jpg)
-
-*Captured from the Pi 5's HDMI output. The board is running this image and
-nothing else — no kernel underneath it, no window system, no launcher.*
-
 ## One engine: SCUMM
 
 **This build plays the LucasArts adventures.** ScummVM supports well over a
