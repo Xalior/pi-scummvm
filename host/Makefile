@@ -100,6 +100,17 @@ HOST_SRCS = main.cpp kernel.cpp defaults.cpp circle_syscalls.cpp \
 	scummvm_backend.cpp
 HOST_OBJS = $(addprefix $(OBJDIR)/,$(HOST_SRCS:.cpp=.o))
 
+# The SD card's read cache, which lives in circle-libsdl2 rather than here.
+#
+# It is not part of SDL and does not use it: it is Circle device-layer code
+# that wraps the card and is picked up by name, so FatFs and every file
+# ScummVM opens go through it without knowing. It is kept in that repository
+# because that is where the shared pieces are today, and it is compiled
+# straight into this kernel — there is no library to link, and no other port
+# has to agree with this one about how it is built.
+DISKCACHE_DIR = $(SHIM)/circle-diskcache
+DISKCACHE_OBJ = $(OBJDIR)/diskcache.o
+
 # ScummVM's own source list, as ScummVM's own module.mk files gave it for
 # the switches above. Generated, checked in, and read here as a plain list:
 # see mk/upstream-sources.mk for how to produce it again.
@@ -117,7 +128,7 @@ $(SVM)/%.cpp $(SVM)/%.c:
 SVM_CXX_OBJS = $(addprefix $(OBJDIR)/svm/,$(patsubst %.cpp,%.o,$(filter %.cpp,$(SVM_SRCS))))
 SVM_C_OBJS   = $(addprefix $(OBJDIR)/svm/,$(patsubst %.c,%.o,$(filter %.c,$(SVM_SRCS))))
 
-OBJS = $(HOST_OBJS) $(SVM_CXX_OBJS) $(SVM_C_OBJS)
+OBJS = $(HOST_OBJS) $(DISKCACHE_OBJ) $(SVM_CXX_OBJS) $(SVM_C_OBJS)
 
 # ScummVM is a C++11 project and says so; gnu++17 is what the rest of this
 # family builds at and what the shim's headers expect.
@@ -244,6 +255,7 @@ DEFINE += -DDISABLE_TEXT_CONSOLE
 INCLUDE := -I $(CURDIR)/svmgen \
 	-I $(SVM) -I $(SVM)/engines \
 	-I $(SHIM)/include -I $(SHIM)/include/SDL2 \
+	-I $(DISKCACHE_DIR) \
 	$(CIRCLE_STDLIB_INCLUDES) $(INCLUDE)
 
 # ScummVM's own compiler selection for its C++ sources. Both the run-time
@@ -314,6 +326,13 @@ LDFLAGS += $(addprefix --wrap=,$(WRAPPED_SYSCALLS))
 $(OBJDIR)/%.o: %.cpp | $(OBJDIR)
 	@echo "  CPP   $@"
 	@$(CPP) $(CPPFLAGS) $(SVM_CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
+
+# The disk cache, which lives outside this directory. Its own rule because
+# the pattern rule above only reaches sources beside this makefile, and its
+# object goes in this board's tree like every other.
+$(DISKCACHE_OBJ): $(DISKCACHE_DIR)/diskcache.cpp | $(OBJDIR)
+	@echo "  CPP   $@"
+	@$(CPP) $(CPPFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # ScummVM's objects, mirroring its source tree under $(OBJDIR)/svm/. The
 # source tree itself is the upstream submodule, and is never written to.
