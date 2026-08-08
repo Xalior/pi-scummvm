@@ -25,20 +25,16 @@ at an upstream release, and the build reads it without ever writing to it.
 Where ScummVM needs something the SDL2 layer does not provide, this repository
 supplies it in `host/` rather than changing ScummVM.
 
-Three processor cores are given separate work:
+![ScummVM running on a Raspberry Pi 5 with no operating system](docs/scummvm-on-bare-metal.jpg)
 
-- **Core 0** owns the hardware. Circle's world lives here — interrupts, USB,
-  the SD card, sound — and no other core touches a device.
-- **Core 1** runs ScummVM and nothing else.
-- **Core 2** puts finished frames on the screen.
+*Captured from the Pi 5's HDMI output. The board is running this image and
+nothing else — no kernel underneath it, no window system, no launcher.*
 
 ## One engine: SCUMM
 
 **This build plays the LucasArts adventures.** ScummVM supports well over a
-hundred engines, and building all of them produces hundreds of megabytes of
-object files and a kernel image far larger than a Raspberry Pi boots
-comfortably. This repository enables the SCUMM engine — the one written for
-LucasArts' own games:
+hundred engines, and building all of them makes a kernel image far larger
+than a Raspberry Pi boots comfortably. This one carries the SCUMM engine:
 
 - The Secret of Monkey Island, Monkey Island 2, The Curse of Monkey Island
 - Day of the Tentacle, Maniac Mansion
@@ -46,81 +42,35 @@ LucasArts' own games:
 - Indiana Jones and the Last Crusade, Indiana Jones and the Fate of Atlantis
 - Loom, Zak McKracken, The Dig, Full Throttle
 
-SCUMM has two sub-engines of its own, and they are separate switches because
-they are separate bodies of code inside the same engine:
+The Humongous Entertainment games — Putt-Putt, Freddi Fish, Backyard Sports —
+are not included; they need things this port does not have.
 
-- **Version 7 and 8** (Full Throttle, The Dig, The Curse of Monkey Island) is
-  **on**. It brings the digital iMUSE sound engine and the SMUSH video player
-  with it, both of which are ScummVM's own code and need nothing from outside.
-- **Humongous Entertainment** (Putt-Putt, Freddi Fish, Backyard Sports) is
-  **off**. It is a different family of games, and it depends on two things
-  this port does not have: high-resolution 16-bit colour, and the Bink video
-  decoder.
+## What works
 
-Adding another engine is three small edits and no new code — the enabling
-line in `host/Makefile`, the engine's directory in the module list beside it,
-and one entry in each of the two tables in `host/svmgen/engines/`. Every
-engine costs build time and image size, so they are added deliberately rather
-than by default.
+The games play, with sound and music.
 
-### What SCUMM needed that a smaller engine did not
+- **Picture.** The older games draw at 320x200 and ScummVM scales that to
+  640x480; the later ones draw 640x480 themselves. Either way it is scaled
+  once more onto your screen.
+- **Mouse and keyboard.** Both, and the mouse is what matters — a SCUMM game
+  is played entirely with a pointer.
+- **Music.** Through ScummVM's own synthesisers: Adlib, FM Towns, PC-98 and
+  the Commodore 64 sound chip.
+- **Saved games and settings.** Written back to the SD card.
 
-Worth recording, because it is the kind of thing that only shows up when you
-try. SCUMM does not link at all without ScummVM's **FM Towns and PC-98 sound
-chip emulation**: the engine's Towns music driver calls straight into it, with
-no switch to turn that off. ScummVM's own `configure` knows this and switches
-the component on for any build containing SCUMM, and this build does the same.
-The Commodore 64 sound chip emulation, for the C64 releases of Maniac Mansion
-and Zak McKracken, is switched on for the same reason.
+What is missing:
 
-Both are ScummVM's own C++ and depend on nothing outside the tree, so neither
-costs this port anything but build time. SCUMM declares a third component,
-its in-game debugger interface, which needs the Dear ImGui library and a
-renderer written against it; that one is left out.
+- **Compressed files of any kind.** Everything ScummVM reads must already be
+  unpacked, including its own interface theme, which upstream ships as a zip.
+  See *Putting it on a card* below.
+- **Compressed audio.** Some releases replace the original sound files with
+  Ogg, MP3 or FLAC versions. Use the game's original files.
+- **The clipboard, the file browser, the screen saver.** There is no desktop
+  for any of them to belong to.
 
-## State of this port
-
-This is an early port. **It builds and links completely, for all three
-boards, and it has not been run on hardware.** The list below is what the code
-does, not what has been observed. Nothing here has drawn a frame on a screen
-yet.
-
-**Present:**
-
-- Video: ScummVM's software rendering path end to end. The older games draw a
-  320x200 paletted picture, ScummVM scales it to 640x480, and the display
-  shows that. The version 7 and 8 games draw 640x480 themselves.
-- Mouse: circle-libsdl2 implements the whole SDL mouse interface over
-  Circle's USB driver. **This has never been exercised on hardware.** It
-  matters more here than in any other game on this family of boards, because
-  a SCUMM game is played entirely with a pointer.
-- Keyboard: USB keyboards through Circle's HID driver.
-- Sound: ScummVM's own mixer, feeding circle-libsdl2's audio output. Music
-  goes through ScummVM's built-in synthesisers — Adlib, FM Towns, PC-98, SID
-  — none of which needs an external library.
-- Files: the game data, the configuration file and the saved games, read from
-  and written to the SD card.
-
-**Absent, and why:**
-
-- **Compressed files of any kind.** This build has no zlib, because there is
-  no library to link against. Everything ScummVM reads must already be
-  unpacked — including the interface theme, which upstream also ships as a
-  `.zip`. See "Putting it on a card" below.
-- **Compressed audio.** Some ScummVM releases of these games replace the
-  original sound files with Ogg Vorbis, MP3 or FLAC versions to save space.
-  None of those decoders is in this build, for the same reason as zlib. Use
-  the game's original files.
-- **Timers run when ScummVM looks at them.** SDL serves its callback timers
-  from a thread, and there are no threads here. This port fires them at the
-  two moments ScummVM is certain to reach — every event poll and every delay
-  — so a timer callback runs late whenever ScummVM is inside one long
-  uninterrupted operation, such as loading a room. Nothing is dropped, only
-  deferred. What that can look like is music timing stumbling at a scene
-  change.
-- **No clipboard, no browser, no touch screen, no screen saver.** There is no
-  desktop for any of them to belong to, and each call says so rather than
-  pretending.
+One thing you may notice: music timing can stumble at a scene change, because
+a game loading a room does not come up for air often enough for the music
+clock to be serviced on time. Nothing is lost, only delayed.
 
 ## What you need to supply
 
@@ -284,32 +234,19 @@ The interface theme is staged as an unpacked directory rather than the
 cannot open a zip. If you replace the theme, unpack your replacement the same
 way.
 
-### The thermal settings in `cmdline.txt`
+### Keeping it cool
 
-One card boots any of the three boards, so all three read the same
-`cmdline.txt`. It carries `socmaxtemp=70`, the temperature in degrees Celsius
-at which the processor is slowed down to cool itself.
+The card carries `cmdline.txt`, which sets the temperature the board is
+allowed to reach and the pin its fan is on:
 
-If your board has a fan, add `gpiofanpin=` and the GPIO pin it is wired to —
-`gpiofanpin=45` is a Raspberry Pi 5 Case Fan or Active Cooler. Naming a fan
-pin changes what happens at that temperature: the fan is switched on and the
-processor is left at full speed, instead of being slowed down. That is what a
-game wants, because a slowed processor drops frames.
+    socmaxtemp=70 gpiofanpin=45
 
-### Changing ScummVM's own command line
+Pin 45 is the Raspberry Pi 5 Case Fan and Active Cooler. With a fan named,
+reaching 70°C switches the fan on and the processor keeps running at full
+speed. Without one it would be slowed down instead, and a slowed processor
+drops frames.
 
-The kernel starts ScummVM with a fixed command line: the game directory, a
-scaling factor, and `--auto-detect` to say "play whatever is in there". A
-block of text inside the image at a fixed offset is appended to that line at
-boot, so a switch can be added — or an existing one overridden, since a later
-setting of the same option wins — without rebuilding or rewriting the card.
-Any ScummVM option can ride in it.
-
-The one you are most likely to want is `--scale-factor=1`. The baked line
-asks for 2, which turns a 320x200 game into exactly the 640x480 the display
-shows. The version 7 and 8 games draw 640x480 already, so for those a factor
-of 1 saves ScummVM drawing four times the pixels and the display shrinking
-them again.
+If your fan is wired somewhere else, change the pin number.
 
 ## License
 
